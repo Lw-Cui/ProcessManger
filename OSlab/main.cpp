@@ -29,6 +29,15 @@ int main(int argc, char *argv[]) {
 		else if (command == "to") {
 			manager.timeOut();
 		}
+		else if (command == "req") {
+			string id;
+			int num;
+			sin >> id >> num;
+			manager.request(id, num);
+		}
+		else if (command == "de") {
+
+		}
 		cout << "\t" << manager.getCurPID() << endl;
 	}
 	return 0;

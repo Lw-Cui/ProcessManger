@@ -1,5 +1,7 @@
 #pragma once
 #include <string>
+#include <unordered_map>
+#include <map>
 #include <list>
 #include <unordered_set>
 #include <vector>
@@ -7,7 +9,7 @@
 class ProcessControl;
 using pPCB = std::shared_ptr<ProcessControl>;
 using plist = std::list<pPCB>::iterator;
-constexpr int RESOURCE = 4;
+constexpr int RESOURCE = 5;
 
 enum Priority {
 	INIT = 0,
@@ -17,11 +19,12 @@ enum Priority {
 
 class ResourceManger {
 public:
-	ResourceManger(int init);
+	ResourceManger(int init = 0);
 	int getAvailableNum();
+	void allocate(int num);
+	void recover(int num);
 	void pushBackToWaiting(pPCB ptr);
 private:
-	int initNum;
 	int available;
 	std::list<pPCB> WaitingList;
 };
@@ -31,20 +34,24 @@ public:
 	ScheduleManger();
 	plist pushBack(pPCB ptr);
 	void remove(pPCB ptr);
-	void request(pPCB ptr, int res, int num);
-	void release(pPCB ptr, int res, int num);
+	bool request(pPCB ptr, const std::string & res, int num);
+	void release(pPCB ptr, const std::string & res, int num);
+	void release(pPCB ptr);
 	pPCB schedule();
 private:
 	std::vector<std::list<pPCB>> readyList;
-	std::vector<ResourceManger> resouce;
+	std::unordered_map<std::string, ResourceManger> resource;
 };
 
 class ProcessControl {
 public:
 	Priority getPriority();
 	ProcessControl(const std::string &id, Priority p);
+	void getResource(const std::string & id, int num);
+	int showResource(const std::string & id);
 private:
 	friend class Manager;
+	std::unordered_map<std::string, int> ownResource;
 	std::string pid;
 	Priority priority;
 	pPCB parent;
@@ -56,6 +63,7 @@ public:
 	Manager();
 	std::string getCurPID();
 	void createProcess(const std::string &id, Priority p);
+	void request(const std::string & id, int num);
 	void timeOut();
 private:
 	void schedule();

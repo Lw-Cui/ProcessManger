@@ -19,6 +19,11 @@ void Manager::createProcess(const std::string & id, Priority p) {
 	schedule();
 }
 
+void Manager::request(const std::string & id, int num) {
+	if (!scheduler.request(runningProcess, id, num))
+		schedule();
+}
+
 void Manager::timeOut() {
 	scheduler.remove(runningProcess);
 	scheduler.pushBack(runningProcess);
@@ -31,7 +36,7 @@ void Manager::schedule() {
 
 ScheduleManger::ScheduleManger() :readyList(SYS + 1) {
 	for (int i = 1; i < RESOURCE; i++)
-		resouce.emplace_back(i);
+		resource.emplace("R" + to_string(i), i);
 }
 
 plist ScheduleManger::pushBack(pPCB pointer) {
@@ -43,15 +48,27 @@ void ScheduleManger::remove(pPCB ptr) {
 	readyList[ptr->getPriority()].remove(ptr);
 }
 
-void ScheduleManger::request(pPCB ptr, int res, int num) {
-	if (resouce[res].getAvailableNum() >= num) {
-			
+bool ScheduleManger::request(pPCB ptr, const std::string & res, int num) {
+	if (resource[res].getAvailableNum() >= num) {
+		ptr->getResource(res, num);
+		resource[res].allocate(num);
+		return true;
 	}
 	else {
+		remove(ptr);
+		resource[res].pushBackToWaiting(ptr);
+		return false;
 	}
 }
 
-void ScheduleManger::release(pPCB ptr, int res, int num) {
+void ScheduleManger::release(pPCB ptr, const std::string & res, int num) {
+	resource[res].recover(ptr->showResource(res));
+}
+
+void ScheduleManger::release(pPCB ptr) {
+	for (auto& p : resource) {
+		p.second.recover(ptr->showResource(p.first));
+	}
 }
 
 pPCB ScheduleManger::schedule() {
@@ -60,18 +77,34 @@ pPCB ScheduleManger::schedule() {
 	return readyList[INIT].front();
 }
 
-ProcessControl::ProcessControl(const std::string & id, Priority p) : pid(id), priority(p) {
+ProcessControl::ProcessControl(const std::string & id, Priority p) : pid(id), priority(p), ownResource(RESOURCE) {
+}
+
+void ProcessControl::getResource(const std::string & id, int num) {
+	ownResource[id] += num;
+}
+
+int ProcessControl::showResource(const std::string & id) {
+	return ownResource[id];
 }
 
 Priority ProcessControl::getPriority() {
 	return priority;
 }
 
-ResourceManger::ResourceManger(int init) :initNum(init) {
+ResourceManger::ResourceManger(int init) :available(init) {
 }
 
 int ResourceManger::getAvailableNum() {
 	return available;
+}
+
+void ResourceManger::allocate(int num) {
+	available -= num;
+}
+
+void ResourceManger::recover(int num) {
+	available += num;
 }
 
 void ResourceManger::pushBackToWaiting(pPCB ptr) {
