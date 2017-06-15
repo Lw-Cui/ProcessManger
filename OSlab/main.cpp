@@ -33,10 +33,18 @@ int main(int argc, char *argv[]) {
 			string id;
 			int num;
 			sin >> id >> num;
-			manager.request(id, num);
+			manager.requestResource(id, num);
+		}
+		else if (command == "rel") {
+			string id;
+			int num;
+			sin >> id >> num;
+			manager.releaseResource(id, num);
 		}
 		else if (command == "de") {
-
+			string id;
+			sin >> id;
+			manager.destroy(id);
 		}
 		cout << "\t" << manager.getCurPID() << endl;
 	}

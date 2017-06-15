@@ -3,7 +3,7 @@ using namespace std;
 
 Manager::Manager() {
 	runningProcess = make_shared<ProcessControl>("init", INIT);
-	scheduler.pushBack(runningProcess);
+	listManager.pushBack(runningProcess);
 	schedule();
 }
 
@@ -15,66 +15,104 @@ void Manager::createProcess(const std::string & id, Priority p) {
 	auto newProcess = make_shared<ProcessControl>(id, p);
 	newProcess->parent = runningProcess;
 	runningProcess->children.push_back(newProcess);
-	scheduler.pushBack(newProcess);
+	listManager.pushBack(newProcess);
 	schedule();
 }
 
-void Manager::request(const std::string & id, int num) {
-	if (!scheduler.request(runningProcess, id, num))
+void Manager::requestResource(const std::string & id, int num) {
+	if (!listManager.requestResource(runningProcess, id, num))
 		schedule();
 }
 
+void Manager::releaseResource(const std::string & id, int num) {
+}
+
+void Manager::destroy(const std::string & id) {
+	destroy(listManager.getPCBbyName(id));
+}
+
 void Manager::timeOut() {
-	scheduler.remove(runningProcess);
-	scheduler.pushBack(runningProcess);
+	listManager.removeFromReadyList(runningProcess);
+	listManager.pushBack(runningProcess);
+	schedule();
+}
+
+void Manager::destroy(pPCB p) {
+	if (p == nullptr) return;
+	for (auto child : p->children) destroy(child);
+	listManager.releaseResource(p);
+	listManager.remove(p);
 	schedule();
 }
 
 void Manager::schedule() {
-	runningProcess = scheduler.schedule();
+	runningProcess = listManager.schedule();
 }
 
-ScheduleManger::ScheduleManger() :readyList(SYS + 1) {
+ListManger::ListManger() :readyList(SYS + 1) {
 	for (int i = 1; i < RESOURCE; i++)
-		resource.emplace("R" + to_string(i), i);
+		resource.emplace("R" + to_string(i), ResourceManger("R" + to_string(i), i));
 }
 
-plist ScheduleManger::pushBack(pPCB pointer) {
+plist ListManger::pushBack(pPCB pointer) {
 	auto &ref = readyList[pointer->getPriority()];
 	return ref.insert(ref.end(), pointer);
 }
 
-void ScheduleManger::remove(pPCB ptr) {
+void ListManger::removeFromReadyList(pPCB ptr) {
 	readyList[ptr->getPriority()].remove(ptr);
 }
 
-bool ScheduleManger::request(pPCB ptr, const std::string & res, int num) {
+void ListManger::removeFromWaitingList(pPCB ptr) {
+	for (auto &l : resource)
+		l.second.remove(ptr);
+}
+
+void ListManger::remove(pPCB ptr) {
+	removeFromReadyList(ptr);
+	removeFromWaitingList(ptr);
+}
+
+bool ListManger::requestResource(pPCB ptr, const std::string & res, int num) {
+	ptr->getResource(res, num);
 	if (resource[res].getAvailableNum() >= num) {
-		ptr->getResource(res, num);
 		resource[res].allocate(num);
 		return true;
 	}
 	else {
-		remove(ptr);
+		removeFromReadyList(ptr);
 		resource[res].pushBackToWaiting(ptr);
 		return false;
 	}
 }
 
-void ScheduleManger::release(pPCB ptr, const std::string & res, int num) {
-	resource[res].recover(ptr->showResource(res));
+void ListManger::releaseResource(pPCB ptr, const std::string & res, int num) {
+	auto l = resource[res].recover(ptr->showResource(res));
+	for (auto p : l) readyList[p->getPriority()].push_back(p);
 }
 
-void ScheduleManger::release(pPCB ptr) {
+void ListManger::releaseResource(pPCB ptr) {
 	for (auto& p : resource) {
-		p.second.recover(ptr->showResource(p.first));
+		auto l = p.second.recover(ptr->showResource(p.first));
+		for (auto p : l) readyList[p->getPriority()].push_back(p);
 	}
 }
 
-pPCB ScheduleManger::schedule() {
+pPCB ListManger::schedule() {
 	if (!readyList[SYS].empty()) return readyList[SYS].front();
 	if (!readyList[USR].empty()) return readyList[USR].front();
 	return readyList[INIT].front();
+}
+
+pPCB ListManger::getPCBbyName(const std::string & str) {
+	for (const auto &l : readyList) {
+		for (const auto &p : l) if (p->getPID() == str) return p;
+	}
+	for (const auto &r : resource) {
+		auto res = r.second.getPCBbyName(str);
+		if (res) return res;
+	}
+	return nullptr;
 }
 
 ProcessControl::ProcessControl(const std::string & id, Priority p) : pid(id), priority(p), ownResource(RESOURCE) {
@@ -88,11 +126,15 @@ int ProcessControl::showResource(const std::string & id) {
 	return ownResource[id];
 }
 
+std::string ProcessControl::getPID() {
+	return pid;
+}
+
 Priority ProcessControl::getPriority() {
 	return priority;
 }
 
-ResourceManger::ResourceManger(int init) :available(init) {
+ResourceManger::ResourceManger(const std::string & str, int init) :name(str), available(init) {
 }
 
 int ResourceManger::getAvailableNum() {
@@ -103,10 +145,29 @@ void ResourceManger::allocate(int num) {
 	available -= num;
 }
 
-void ResourceManger::recover(int num) {
+std::list<pPCB> ResourceManger::recover(int num) {
 	available += num;
+	std::list<pPCB> ready;
+	for (auto ite = waitingList.begin();
+		ite != waitingList.end() && (*ite)->showResource(name) <= available;
+		ite = waitingList.erase(ite)) {
+		ready.push_back(*ite);
+		available -= (*ite)->showResource(name);
+	}
+	return ready;
 }
 
 void ResourceManger::pushBackToWaiting(pPCB ptr) {
-	WaitingList.push_back(ptr);
+	waitingList.push_back(ptr);
+}
+
+void ResourceManger::remove(pPCB ptr) {
+	waitingList.remove(ptr);
+}
+
+pPCB ResourceManger::getPCBbyName(const std::string & str) const {
+	for (auto p : waitingList)
+		if (p->getPID() == str)
+			return p;
+	return nullptr;
 }

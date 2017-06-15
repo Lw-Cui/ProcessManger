@@ -19,25 +19,31 @@ enum Priority {
 
 class ResourceManger {
 public:
-	ResourceManger(int init = 0);
+	ResourceManger(const std::string &str = "", int init = 0);
 	int getAvailableNum();
 	void allocate(int num);
-	void recover(int num);
+	std::list<pPCB> recover(int num);
 	void pushBackToWaiting(pPCB ptr);
+	void remove(pPCB ptr);
+	pPCB getPCBbyName(const std::string &str) const;
 private:
+	std::string name;
 	int available;
-	std::list<pPCB> WaitingList;
+	std::list<pPCB> waitingList;
 };
 
-class ScheduleManger {
+class ListManger {
 public:
-	ScheduleManger();
+	ListManger();
 	plist pushBack(pPCB ptr);
+	void removeFromReadyList(pPCB ptr);
+	void removeFromWaitingList(pPCB ptr);
 	void remove(pPCB ptr);
-	bool request(pPCB ptr, const std::string & res, int num);
-	void release(pPCB ptr, const std::string & res, int num);
-	void release(pPCB ptr);
+	bool requestResource(pPCB ptr, const std::string & res, int num);
+	void releaseResource(pPCB ptr, const std::string & res, int num);
+	void releaseResource(pPCB ptr);
 	pPCB schedule();
+	pPCB getPCBbyName(const std::string &str);
 private:
 	std::vector<std::list<pPCB>> readyList;
 	std::unordered_map<std::string, ResourceManger> resource;
@@ -49,6 +55,7 @@ public:
 	ProcessControl(const std::string &id, Priority p);
 	void getResource(const std::string & id, int num);
 	int showResource(const std::string & id);
+	std::string getPID();
 private:
 	friend class Manager;
 	std::unordered_map<std::string, int> ownResource;
@@ -63,10 +70,13 @@ public:
 	Manager();
 	std::string getCurPID();
 	void createProcess(const std::string &id, Priority p);
-	void request(const std::string & id, int num);
+	void requestResource(const std::string & id, int num);
+	void releaseResource(const std::string & id, int num);
+	void destroy(const std::string & id);
 	void timeOut();
 private:
+	void destroy(pPCB);
 	void schedule();
 	pPCB runningProcess;
-	ScheduleManger scheduler;
+	ListManger listManager;
 };
